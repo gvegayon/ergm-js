@@ -12,7 +12,7 @@ compute standard errors, and implements exactly three model terms. For real
 ERGM fitting, see [`ergm`](https://cran.r-project.org/package=ergm) (R) or
 [`ergmito`](https://github.com/USCCANA/ergmito) for small/pooled networks.
 
-[**Live demo**](#) *(update this link once the repo has GitHub Pages enabled -- see below)*
+[**Live demo**](https://gvegayon.github.io/ergm-js/)
 
 ## Quick start
 
@@ -41,14 +41,14 @@ python3 -m http.server -d ergm-js 8000
 # then open http://localhost:8000
 ```
 
-## Enabling GitHub Pages (once this is its own repo)
+## GitHub Pages
 
-This directory is a self-contained repo root -- `git mv ergm-js ../ergm-js`
-into its own repo, push, then **Settings &rarr; Pages &rarr; Source: Deploy
-from a branch &rarr; `main` / `(root)`**. `index.html` at the root is served
-directly at `https://<user>.github.io/<repo>/`; `.nojekyll` is already
-present so Pages serves the vendored files verbatim instead of running them
-through Jekyll.
+Deployed by [`.github/workflows/pages.yml`](.github/workflows/pages.yml) on
+every push to `main` (Settings &rarr; Pages &rarr; Source: **GitHub
+Actions**). No build step -- the workflow uploads the repo root as-is;
+`.nojekyll` at the root tells Pages to serve it verbatim instead of running
+it through Jekyll. `index.html` at the root lands at
+`https://<user>.github.io/<repo>/`.
 
 ## The model
 

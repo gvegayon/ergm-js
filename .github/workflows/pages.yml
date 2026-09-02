@@ -1,0 +1,36 @@
+# Publishes this repo's static site (index.html + src/ + vendor/) to GitHub
+# Pages. No build step -- ergm-js is plain HTML/JS, so the whole repo root
+# is uploaded as-is; .nojekyll (already at the root) tells Pages to serve
+# it verbatim instead of running it through Jekyll.
+#
+# One-time setup: Settings -> Pages -> Source: "GitHub Actions" (done).
+name: Deploy to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
