@@ -29,6 +29,12 @@
     meanDegree: 4,
     pGroup: 0.5,
     theta: { edges: -2.5, nodematch: 1.5, mutual: 1 },
+    // The ERGM terms included in this widget's model. The order determines
+    // the order of the corresponding theta sliders.
+    model: ["edges", "nodematch", "mutual"],
+    // Initial-network controls can be hidden independently. Term controls
+    // are selected by `model`, not by this object.
+    controls: { n: true, meanDegree: true },
     seed: 42,
     stepsPerFrame: 50, // Gibbs proposals per animation frame while running
     height: 360,
@@ -42,6 +48,54 @@
     // layout can't show. "circle": the original static two-arc layout.
     layout: "force",
   };
+
+  // Widget-specific presentation metadata for the terms currently exposed
+  // by ergm.js. A term must be in ERGM.TERMS to be selected in `model`; this
+  // table supplies the slider presentation for those built-in terms.
+  const TERM_CONTROLS = {
+    edges: { label: "θ edges (density)", min: -5, max: 1, step: 0.1 },
+    nodematch: { label: "θ nodematch (homophily)", min: -2, max: 4, step: 0.1 },
+    mutual: { label: "θ mutual (reciprocity)", min: -2, max: 4, step: 0.1 },
+  };
+
+  const NETWORK_CONTROLS = {
+    n: { key: "n", label: "n (nodes)", min: 20, max: 120, step: 1, resetOnly: true },
+    meanDegree: { key: "meanDegree", label: "mean out-degree", min: 1, max: 10, step: 0.5, resetOnly: true },
+  };
+
+  function hasOwn(obj, key) {
+    return Object.prototype.hasOwnProperty.call(obj, key);
+  }
+
+  // Validate at mount time so a typo never creates a partly-rendered widget.
+  // Repeated terms are harmless but non-identifiable in an ERGM, so retain
+  // only their first occurrence rather than creating duplicate sliders or
+  // applying the same coefficient more than once.
+  function normalizeModel(model) {
+    if (!Array.isArray(model)) {
+      throw new TypeError("ERGMWidget option `model` must be an array of term names.");
+    }
+
+    const out = [];
+    const seen = Object.create(null);
+    for (let i = 0; i < model.length; i++) {
+      const name = model[i];
+      if (typeof name !== "string") {
+        throw new TypeError("ERGMWidget option `model` must contain only string term names.");
+      }
+      if (!hasOwn(ERGM.TERMS, name)) {
+        throw new RangeError('Unknown ERGM term "' + name + '" in `model`.');
+      }
+      if (!hasOwn(TERM_CONTROLS, name)) {
+        throw new RangeError('ERGM term "' + name + '" has no widget control definition.');
+      }
+      if (!seen[name]) {
+        seen[name] = true;
+        out.push(name);
+      }
+    }
+    return out;
+  }
 
   // Injected once; every widget instance shares the same stylesheet, scoped
   // under .ergm-widget so a host page's own CSS is left alone. A host page
@@ -223,10 +277,25 @@
   };
 
   function Widget(el, opts) {
+    opts = opts || {};
+    const model = normalizeModel(hasOwn(opts, "model") ? opts.model : DEFAULTS.model);
+    const suppliedTheta = opts.theta && typeof opts.theta === "object" ? opts.theta : {};
+    const theta = {};
+    for (let i = 0; i < model.length; i++) {
+      const name = model[i];
+      theta[name] = hasOwn(suppliedTheta, name) ? suppliedTheta[name] : DEFAULTS.theta[name];
+    }
+
+    // Only active terms are copied into the live theta object. step() still
+    // loops over its complete built-in term order, but omitted properties
+    // contribute zero, so a supplied coefficient for an inactive term cannot
+    // accidentally alter this widget's model.
     ensureCSS();
     this.el = el;
     this.opts = Object.assign({}, DEFAULTS, opts, {
-      theta: Object.assign({}, DEFAULTS.theta, (opts && opts.theta) || {}),
+      model: model,
+      controls: Object.assign({}, DEFAULTS.controls, opts.controls || {}),
+      theta: theta,
     });
     this.running = false;
     this.stepCount = 0;
@@ -256,13 +325,11 @@
     const controls = document.createElement("div");
     controls.className = "ergm-controls";
 
-    const sliders = [
-      { key: "theta.edges", label: "θ edges (density)", min: -5, max: 1, step: 0.1 },
-      { key: "theta.nodematch", label: "θ nodematch (homophily)", min: -2, max: 4, step: 0.1 },
-      { key: "theta.mutual", label: "θ mutual (reciprocity)", min: -2, max: 4, step: 0.1 },
-      { key: "n", label: "n (nodes)", min: 20, max: 120, step: 1, resetOnly: true },
-      { key: "meanDegree", label: "mean out-degree", min: 1, max: 10, step: 0.5, resetOnly: true },
-    ];
+    const sliders = this.opts.model.map(function (name) {
+      return Object.assign({ key: "theta." + name }, TERM_CONTROLS[name]);
+    });
+    if (this.opts.controls.n !== false) sliders.push(NETWORK_CONTROLS.n);
+    if (this.opts.controls.meanDegree !== false) sliders.push(NETWORK_CONTROLS.meanDegree);
 
     this._inputs = {};
     const self = this;
@@ -331,13 +398,14 @@
     stats.className = "ergm-stats";
     stats.textContent = "…";
 
-    const hint = document.createElement("div");
-    hint.className = "ergm-hint";
-    hint.textContent = "Directed network: reciprocity (θ mutual) needs direction, so this demo is one-mode, not bipartite.";
-
     controls.appendChild(buttons);
     controls.appendChild(stats);
-    controls.appendChild(hint);
+    if (this.opts.model.indexOf("mutual") !== -1) {
+      const hint = document.createElement("div");
+      hint.className = "ergm-hint";
+      hint.textContent = "Directed network: reciprocity (θ mutual) needs direction, so this demo is one-mode, not bipartite.";
+      controls.appendChild(hint);
+    }
 
     el.appendChild(pane);
     el.appendChild(controls);

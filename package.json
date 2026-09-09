@@ -12,7 +12,7 @@
     "LICENSE.md"
   ],
   "scripts": {
-    "test": "node test/selftest.js"
+    "test": "node test/selftest.js && node test/widget-test.js"
   },
   "keywords": [
     "ergm",
