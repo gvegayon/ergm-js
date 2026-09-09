@@ -1,0 +1,9 @@
+version: 1
+
+groups:
+  ergm-js:
+    # Public behavior and deployed assets require a release version bump.
+    # Documentation, tests, and workflow-only changes do not.
+    paths: ["src/", "vendor/", "index.html", "package.json"]
+    files: [package.json]
+    preset: node-package

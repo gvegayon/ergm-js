@@ -17,6 +17,7 @@
  * Run: node test/selftest.js
  */
 const ERGM = require("../src/ergm.js");
+const packageInfo = require("../package.json");
 
 let failures = 0;
 function check(name, cond, detail) {
@@ -73,6 +74,14 @@ function burnAndMeasure(n, theta, opts) {
 }
 
 console.log("ergm.js self-test\n");
+
+// --- 0. Public version ------------------------------------------------
+console.log("0. public semantic version");
+check(
+  "ERGM.VERSION matches package.json",
+  ERGM.VERSION === packageInfo.version && /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(ERGM.VERSION),
+  "got " + ERGM.VERSION + " vs " + packageInfo.version
+);
 
 // --- 1. Pure density (edges only) -------------------------------------
 console.log("1. edges-only -> density matches logistic(theta_edges)");

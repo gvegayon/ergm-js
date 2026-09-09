@@ -29,6 +29,7 @@ Four `<script>` tags, one `<div>`, one call:
   ERGMWidget.mount(document.getElementById("demo"), {
     n: 40,
     meanDegree: 4,
+    model: ["edges", "nodematch", "mutual"],
     theta: { edges: -2.5, nodematch: 1.5, mutual: 1 },
   });
 </script>
@@ -212,7 +213,9 @@ ERGMWidget.mount(el, options)
 | `n` | `40` | node count -- rebuilds the network as soon as the slider is released or stepped (see "Live sliders" below), no Reset click needed |
 | `meanDegree` | `4` | target mean out-degree of the initial Bernoulli graph -- same live-rebuild behavior as `n` |
 | `pGroup` | `0.5` | P(node attribute = 1) (applied on Reset) |
-| `theta` | `{edges: -2.5, nodematch: 1.5, mutual: 1}` | live model parameters, bound to the sliders |
+| `model` | `["edges", "nodematch", "mutual"]` | ordered list of active ERGM terms; determines which θ sliders are shown |
+| `theta` | `{edges: -2.5, nodematch: 1.5, mutual: 1}` | live model parameters for active terms, bound to the sliders |
+| `controls` | `{n: true, meanDegree: true}` | show/hide the `n` and initial mean out-degree sliders independently |
 | `seed` | `42` | RNG seed, for reproducible runs |
 | `stepsPerFrame` | `50` | Gibbs proposals per animation frame while running |
 | `height` | `360` | pixel height of the graph pane |
@@ -223,6 +226,28 @@ ERGMWidget.mount(el, options)
 
 `mount()` returns the widget instance (`toggleRun()`, `stepN(count)` also
 callable directly if you want your own buttons).
+
+### Choosing model terms
+
+Pass `model` as a string array to choose the ERGM terms used by one widget.
+The array order controls the order of the θ sliders:
+
+```js
+ERGMWidget.mount(document.getElementById("demo"), {
+  model: ["edges", "mutual"],
+  theta: { edges: -2.5, mutual: 1.5 },
+  controls: { n: true, meanDegree: false },
+});
+```
+
+Only active terms receive a slider and contribute to the sampler; a supplied
+coefficient for an inactive term is ignored. Omitting `model` retains the
+three-term default. Repeated names are deduplicated in first-seen order, so
+`["edges", "mutual", "edges"]` is equivalent to `["edges", "mutual"]`.
+`model: []` is valid and produces a zero-term model, where every dyad has
+conditional tie probability 0.5. `model` must be an array of strings: a
+non-array or non-string entry throws `TypeError`, and an unknown term throws
+`RangeError` at mount time.
 
 ### Live sliders
 
@@ -338,8 +363,9 @@ TERMS.triangle = {
 TERM_ORDER.push("triangle");
 ```
 
-Then add a slider for it in `ergm-widget.js` (or drive `theta.triangle`
-programmatically) -- `step()`/`simulate()` need no changes, since they loop
+Then add its slider metadata to `TERM_CONTROLS` in `ergm-widget.js`, and
+include it in a widget's `model` array (or drive `theta.triangle`
+programmatically). `step()`/`simulate()` need no changes, since they loop
 over `TERM_ORDER`.
 
 ## Tests
@@ -355,6 +381,8 @@ probabilities have an exact logistic formula to check against; with `mutual`
 on, it checks the mutual-dyad count rises relative to a `mutual = 0`
 baseline. It also checks that a fixed seed reproduces an identical run
 bit-for-bit, and that `toGraphology()`'s output shape is well-formed.
+`test/widget-test.js` checks model normalization, slider selection, optional
+setup controls, and validation errors with a lightweight DOM stand-in.
 
 ## Vendored dependencies
 
