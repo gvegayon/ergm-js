@@ -104,7 +104,7 @@
 .ergm-widget { display: flex; flex-wrap: wrap; gap: 1em; font-family: inherit; }
 .ergm-widget .ergm-graph-pane { position: relative; flex: 1 1 320px; min-width: 240px; border: 1px solid #d8dce1; border-radius: 6px; overflow: hidden; background: #fff; }
 .ergm-widget .ergm-graph { position: absolute; inset: 0; }
-.ergm-widget .ergm-version { position: absolute; right: 0.6em; bottom: 0.5em; z-index: 1; pointer-events: none; padding: 0.15em 0.4em; border-radius: 3px; background: rgba(255, 255, 255, 0.82); color: #6b7280; font-size: 0.75em; line-height: 1.2; }
+.ergm-widget .ergm-version { position: absolute; right: 0.6em; bottom: 0.5em; z-index: 1; padding: 0.15em 0.4em; border-radius: 3px; background: rgba(255, 255, 255, 0.82); color: #6b7280; font-size: 0.75em; line-height: 1.2; text-decoration: underline; cursor: pointer; }
 .ergm-widget .ergm-controls { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 0.6em; font-size: 0.85em; }
 .ergm-widget .ergm-row { display: flex; flex-direction: column; gap: 0.15em; }
 .ergm-widget .ergm-row label { display: flex; justify-content: space-between; gap: 0.5em; }
@@ -322,8 +322,11 @@
     const graphDiv = document.createElement("div");
     graphDiv.className = "ergm-graph";
     pane.appendChild(graphDiv);
-    const version = document.createElement("div");
+    const version = document.createElement("a");
     version.className = "ergm-version";
+    version.href = "https://github.com/gvegayon/ergm-js";
+    version.target = "_blank";
+    version.rel = "noopener noreferrer";
     version.textContent = "ergm-js v" + ERGM.VERSION;
     pane.appendChild(version);
 
