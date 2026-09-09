@@ -64,6 +64,9 @@ console.log("ergm-widget.js configuration tests\n");
   assert.deepStrictEqual(widget.opts.model, ["edges", "nodematch", "mutual"]);
   assert.deepStrictEqual(inputKeys(widget), ["theta.edges", "theta.nodematch", "theta.mutual", "n", "meanDegree"]);
   assert.strictEqual(widget._versionEl.textContent, "ergm-js v" + ERGM.VERSION);
+  assert.strictEqual(widget._versionEl.href, "https://github.com/gvegayon/ergm-js");
+  assert.strictEqual(widget._versionEl.target, "_blank");
+  assert.strictEqual(widget._versionEl.rel, "noopener noreferrer");
 }
 
 // Term slider order follows the caller's model order; inactive theta values

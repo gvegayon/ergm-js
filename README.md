@@ -128,6 +128,9 @@ ERGM.makeRNG(seed)
 // -> a seeded PRNG function `() => number in [0, 1)` (mulberry32).
 //    Deterministic: same seed -> same simulation, every time.
 
+ERGM.VERSION
+// -> the current semantic version string, e.g. "0.2.0".
+
 ERGM.Net(n, { attr, rng })
 // -> a directed, loopless graph on n nodes.
 //    attr:  Uint8Array(n) binary node covariate (default: alternating 0/1).
@@ -285,6 +288,19 @@ The widget builds its own DOM (a graph pane + sliders + Run/Step/Reset +
 stats readout) inside `el`, and injects a small scoped stylesheet
 (`.ergm-widget ...`) once per page -- override any of it from your own CSS,
 it just needs to come after.
+
+The graph pane shows a clickable `ergm-js v…` badge, read directly from
+`ERGM.VERSION` and linked to the GitHub repository.
+
+## Versioning
+
+The project uses [semantic versioning](https://semver.org/). `package.json`
+is the release manifest checked by the `node-package` preset in
+[`please-bump`](https://github.com/gvegayon/please-bump); the pull-request
+workflow requires a version increase when public source, vendored assets, or
+the demo page changes. `ERGM.VERSION` is covered by the self-test and must
+match `package.json`, keeping the in-diagram badge synchronized with the
+release version.
 
 ## Using it in reveal.js / Quarto
 
