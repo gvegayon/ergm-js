@@ -129,7 +129,7 @@ ERGM.makeRNG(seed)
 //    Deterministic: same seed -> same simulation, every time.
 
 ERGM.VERSION
-// -> the current semantic version string, e.g. "0.2.0".
+// -> the current semantic version string, e.g. "0.2.1".
 
 ERGM.Net(n, { attr, rng })
 // -> a directed, loopless graph on n nodes.

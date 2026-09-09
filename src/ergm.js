@@ -53,7 +53,7 @@
 
   // Public semantic version. The widget renders this value in its graph pane;
   // keep it synchronized with package.json (covered by the self-test).
-  const VERSION = "0.2.0";
+  const VERSION = "0.2.1";
 
   // ---------------------------------------------------------------------
   // RNG -- mulberry32, a small, fast, seedable PRNG. Not cryptographic;
