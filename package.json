@@ -1,6 +1,6 @@
 {
   "name": "ergm-js",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A small, dependency-light Exponential Random Graph Model simulator for teaching and presentations.",
   "license": "MIT",
   "main": "src/ergm.js",

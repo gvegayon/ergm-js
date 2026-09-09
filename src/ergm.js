@@ -51,6 +51,10 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
+  // Public semantic version. The widget renders this value in its graph pane;
+  // keep it synchronized with package.json (covered by the self-test).
+  const VERSION = "0.2.0";
+
   // ---------------------------------------------------------------------
   // RNG -- mulberry32, a small, fast, seedable PRNG. Not cryptographic;
   // good enough (and reproducible) for a teaching demo.
@@ -278,6 +282,7 @@
   }
 
   return {
+    VERSION: VERSION,
     makeRNG: makeRNG,
     Net: Net,
     TERMS: TERMS,
