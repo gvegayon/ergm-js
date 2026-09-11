@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "ergm-js: Dependency-Light Exponential Random Graph Model Simulator"
+version: "0.2.1"
+authors:
+  - family-names: "Vega Yon"
+    given-names: "George G."
+    orcid: "https://orcid.org/0000-0002-3171-0844"
+abstract: "A small dependency-light JavaScript simulator for exponential random graph models."
+license: "MIT"
+repository-code: "https://github.com/gvegayon/ergm-js"
+url: "https://gvegayon.github.io/ergm-js/"
+keywords:
+  - "ERGMs"
+  - "networks"
+  - "simulation"
+  - "JavaScript"
