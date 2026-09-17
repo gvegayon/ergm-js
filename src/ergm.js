@@ -271,13 +271,15 @@
       stat: function (net) {
         let s = 0;
         const n = net.n;
+        const attr = attributeVector(net, 0);
         for (let i = 0; i < n; i++)
           for (let j = 0; j < n; j++)
-            if (i !== j && net.has(i, j) && net.attr[i] === net.attr[j]) s++;
+            if (i !== j && net.has(i, j) && attr[i] === attr[j]) s++;
         return s;
       },
       delta: function (net, i, j) {
-        return net.attr[i] === net.attr[j] ? 1 : 0;
+        const attr = attributeVector(net, 0);
+        return attr[i] === attr[j] ? 1 : 0;
       },
     },
 
@@ -401,6 +403,127 @@
       if (allowed.indexOf(key) < 0) throw new RangeError(name + " does not accept parameter `" + key + "`.");
     });
   }
+
+  // Attribute terms all add a value associated with the candidate tie. Their
+  // change statistic is therefore that same value, while the whole-network
+  // statistic sums it over present loopless ties. Attribute vector validation
+  // deliberately happens both through the model hook and here, so direct
+  // callers of an instance's stat/delta functions cannot bypass it.
+  function attributeIndexFromSpec(spec, name) {
+    const attrIndex = spec.attr === undefined ? 0 : spec.attr;
+    if (!Number.isInteger(attrIndex) || attrIndex < 0) {
+      throw new RangeError(name + " `attr` must be a non-negative integer.");
+    }
+    return attrIndex;
+  }
+
+  function finiteAttributeContribution(value, name) {
+    if (!Number.isFinite(value)) {
+      throw new RangeError(name + " produced a non-finite attribute contribution.");
+    }
+    return value;
+  }
+
+  function attributeTerm(spec, name, contribution) {
+    const attrIndex = attributeIndexFromSpec(spec, name);
+
+    function value(net, i, j) {
+      return finiteAttributeContribution(contribution(attributeVector(net, attrIndex), i, j), name);
+    }
+
+    return {
+      stat: function (net) {
+        let s = 0;
+        for (let i = 0; i < net.n; i++) {
+          for (let j = 0; j < net.n; j++) {
+            if (i !== j && net.has(i, j)) {
+              s = finiteAttributeContribution(s + value(net, i, j), name);
+            }
+          }
+        }
+        return s;
+      },
+      delta: function (net, i, j) {
+        return value(net, i, j);
+      },
+      validate: function (net) {
+        const attr = attributeVector(net, attrIndex);
+        // Ensure every possible candidate tie has a finite real contribution
+        // before a Gibbs score can use it. In particular this rules out an
+        // overflow from an otherwise valid numeric attribute vector.
+        for (let i = 0; i < net.n; i++) {
+          for (let j = 0; j < net.n; j++) {
+            if (i !== j) finiteAttributeContribution(contribution(attr, i, j), name);
+          }
+        }
+      },
+    };
+  }
+
+  function validateAbsDiffExponent(spec) {
+    if (spec.alpha !== undefined && (typeof spec.alpha !== "number" || !Number.isFinite(spec.alpha) || spec.alpha <= 0)) {
+      throw new RangeError("absdiff `alpha` must be a positive finite number.");
+    }
+    return spec.alpha === undefined ? 1 : spec.alpha;
+  }
+
+  function validateDiffExponent(spec) {
+    if (spec.alpha !== undefined && (!Number.isInteger(spec.alpha) || spec.alpha <= 0)) {
+      throw new RangeError("diff `alpha` must be a positive integer.");
+    }
+    return spec.alpha === undefined ? 1 : spec.alpha;
+  }
+
+  TERM_FACTORIES.absdiff = function (spec) {
+    validateFactoryKeys(spec, ["term", "id", "attr", "alpha"], "absdiff");
+    const alpha = validateAbsDiffExponent(spec);
+    return attributeTerm(spec, "absdiff", function (attr, i, j) {
+      return Math.pow(Math.abs(attr[i] - attr[j]), alpha);
+    });
+  };
+
+  TERM_FACTORIES.diff = function (spec) {
+    validateFactoryKeys(spec, ["term", "id", "attr", "alpha", "tailHead"], "diff");
+    const alpha = validateDiffExponent(spec);
+    const tailHead = spec.tailHead === undefined ? true : spec.tailHead;
+    if (typeof tailHead !== "boolean") {
+      throw new TypeError("diff `tailHead` must be a boolean.");
+    }
+    return attributeTerm(spec, "diff", function (attr, i, j) {
+      const sign = tailHead ? 1 : -1;
+      return Math.pow(sign * (attr[i] - attr[j]), alpha);
+    });
+  };
+
+  TERM_FACTORIES.nodeicov = function (spec) {
+    validateFactoryKeys(spec, ["term", "id", "attr"], "nodeicov");
+    return attributeTerm(spec, "nodeicov", function (attr, i, j) {
+      return attr[j];
+    });
+  };
+
+  TERM_FACTORIES.nodeocov = function (spec) {
+    validateFactoryKeys(spec, ["term", "id", "attr"], "nodeocov");
+    return attributeTerm(spec, "nodeocov", function (attr, i, j) {
+      return attr[i];
+    });
+  };
+
+  TERM_FACTORIES.nodecov = function (spec) {
+    validateFactoryKeys(spec, ["term", "id", "attr"], "nodecov");
+    return attributeTerm(spec, "nodecov", function (attr, i, j) {
+      return attr[i] + attr[j];
+    });
+  };
+
+  // The fixed string term remains the original attr[0] homophily counter.
+  // A descriptor can select any attribute vector and use a distinct model ID.
+  TERM_FACTORIES.nodematch = function (spec) {
+    validateFactoryKeys(spec, ["term", "id", "attr"], "nodematch");
+    return attributeTerm(spec, "nodematch", function (attr, i, j) {
+      return attr[i] === attr[j] ? 1 : 0;
+    });
+  };
 
   TERM_FACTORIES.idegree = function (spec) {
     validateFactoryKeys(spec, ["term", "id", "degree"], "idegree");
