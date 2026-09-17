@@ -304,30 +304,37 @@ release version.
 
 ## Using it in reveal.js / Quarto
 
-`embed-resources: true` inlines local files at render time, so point Quarto
-at the four scripts from the deck's YAML:
+The recommended way to use this widget in Quarto (`html`, websites, books,
+or `revealjs` decks) is the
+[**ergm-quarto**](https://github.com/gvegayon/ergm-quarto) extension:
 
-```yaml
-format:
-  revealjs:
-    include-in-header:
-      - text: |
-          <script src="ergm-js/vendor/graphology.umd.min.js"></script>
-          <script src="ergm-js/vendor/sigma.min.js"></script>
-          <script src="ergm-js/src/ergm.js"></script>
-          <script src="ergm-js/src/ergm-widget.js"></script>
+```bash
+quarto add gvegayon/ergm-quarto
 ```
-
-Then, on any slide:
 
 ```markdown
-```{=html}
-<div class="ergm-widget" id="ergm-demo"></div>
-<script>ERGMWidget.mount(document.getElementById("ergm-demo"));</script>
-```
+{{< ergm-widget n=60 theta-nodematch=2 height=420 >}}
 ```
 
-The widget handles four reveal.js-specific issues on its own:
+It vendors this library (so `embed-resources: true` and fully offline
+rendering both keep working), exposes every widget option as a shortcode
+kwarg or a document-level YAML default, adds automatic light/dark theming,
+and -- notably for reveal.js -- mounts widgets at `DOMContentLoaded` rather
+than via an inline `<script>` next to each `<div>`. reveal.js itself loads
+at the *end* of `<body>`, after all slide markup, so an inline script would
+run before `window.Reveal` exists and the widget's own lazy-init logic would
+take its `IntersectionObserver` fallback instead of its per-slide `Reveal`
+branch -- wrong inside a deck, where every slide is already in the DOM. See
+the extension's [docs](https://gvegayon.github.io/ergm-quarto/) for the full
+reasoning and option reference.
+
+If you'd rather not add the extension, you can still load the four scripts
+by hand and call `ERGMWidget.mount()` yourself in an `include-in-header` /
+inline-script recipe -- see the widget's own lazy-init handling below for
+what that manual route has to work around.
+
+The widget handles four reveal.js-specific issues on its own (whether you
+mount it via the extension or by hand):
 
 1. **Lazy init.** Every slide exists in the DOM from page load. The widget
    waits for `Reveal.on('slidechanged')` (falling back to an
