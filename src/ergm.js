@@ -298,6 +298,89 @@
         return net.has(j, i) ? 1 : 0;
       },
     },
+
+    // Number of vertices with no incident directed ties.
+    isolates: {
+      stat: function (net) {
+        let s = 0;
+        for (let v = 0; v < net.n; v++) {
+          let degree = 0;
+          for (let k = 0; k < net.n; k++) {
+            if (k !== v && (net.has(v, k) || net.has(k, v))) degree++;
+          }
+          if (degree === 0) s++;
+        }
+        return s;
+      },
+      delta: function (net, i, j) {
+        let change = 0;
+        if (outDegreeWithout(net, i, i, j) + inDegreeWithout(net, i, i, j) === 0) change--;
+        if (outDegreeWithout(net, j, i, j) + inDegreeWithout(net, j, i, j) === 0) change--;
+        return change;
+      },
+    },
+
+    // In- and out-two-stars, respectively.
+    istar2: {
+      stat: function (net) {
+        let s = 0;
+        for (let v = 0; v < net.n; v++) {
+          const d = inDegreeWithout(net, v, -1, -1);
+          s += d * (d - 1) / 2;
+        }
+        return s;
+      },
+      delta: function (net, i, j) {
+        return inDegreeWithout(net, j, i, j);
+      },
+    },
+    ostar2: {
+      stat: function (net) {
+        let s = 0;
+        for (let v = 0; v < net.n; v++) {
+          const d = outDegreeWithout(net, v, -1, -1);
+          s += d * (d - 1) / 2;
+        }
+        return s;
+      },
+      delta: function (net, i, j) {
+        return outDegreeWithout(net, i, i, j);
+      },
+    },
+
+    density: {
+      stat: function (net) {
+        const dyads = net.n * (net.n - 1);
+        return dyads > 0 ? TERMS.edges.stat(net) / dyads : 0;
+      },
+      delta: function (net) {
+        const dyads = net.n * (net.n - 1);
+        return dyads > 0 ? 1 / dyads : 0;
+      },
+    },
+
+    idegree15: {
+      stat: function (net) {
+        let s = 0;
+        for (let v = 0; v < net.n; v++) s += Math.pow(inDegreeWithout(net, v, -1, -1), 1.5);
+        return s;
+      },
+      delta: function (net, i, j) {
+        const d = inDegreeWithout(net, j, i, j);
+        return Math.pow(d + 1, 1.5) - Math.pow(d, 1.5);
+      },
+    },
+    odegree15: {
+      stat: function (net) {
+        let s = 0;
+        for (let v = 0; v < net.n; v++) s += Math.pow(outDegreeWithout(net, v, -1, -1), 1.5);
+        return s;
+      },
+      delta: function (net, i, j) {
+        const d = outDegreeWithout(net, i, i, j);
+        return Math.pow(d + 1, 1.5) - Math.pow(d, 1.5);
+      },
+    },
   };
 
   // Parameterized terms register factories here. A factory receives the
@@ -306,6 +389,50 @@
   // Keeping this registry public mirrors TERMS and lets later term families
   // plug into createModel() without changing the compiler.
   const TERM_FACTORIES = Object.create(null);
+
+  function validateDegreeParameter(spec, name) {
+    if (!Number.isInteger(spec.degree) || spec.degree < 0) {
+      throw new RangeError(name + " `degree` must be a non-negative integer.");
+    }
+  }
+
+  function validateFactoryKeys(spec, allowed, name) {
+    Object.keys(spec).forEach(function (key) {
+      if (allowed.indexOf(key) < 0) throw new RangeError(name + " does not accept parameter `" + key + "`.");
+    });
+  }
+
+  TERM_FACTORIES.idegree = function (spec) {
+    validateFactoryKeys(spec, ["term", "id", "degree"], "idegree");
+    validateDegreeParameter(spec, "idegree");
+    return {
+      stat: function (net) {
+        let s = 0;
+        for (let v = 0; v < net.n; v++) if (inDegreeWithout(net, v, -1, -1) === spec.degree) s++;
+        return s;
+      },
+      delta: function (net, i, j) {
+        const d = inDegreeWithout(net, j, i, j);
+        return (d + 1 === spec.degree ? 1 : 0) - (d === spec.degree ? 1 : 0);
+      },
+    };
+  };
+
+  TERM_FACTORIES.odegree = function (spec) {
+    validateFactoryKeys(spec, ["term", "id", "degree"], "odegree");
+    validateDegreeParameter(spec, "odegree");
+    return {
+      stat: function (net) {
+        let s = 0;
+        for (let v = 0; v < net.n; v++) if (outDegreeWithout(net, v, -1, -1) === spec.degree) s++;
+        return s;
+      },
+      delta: function (net, i, j) {
+        const d = outDegreeWithout(net, i, i, j);
+        return (d + 1 === spec.degree ? 1 : 0) - (d === spec.degree ? 1 : 0);
+      },
+    };
+  };
 
   function hasOwn(obj, key) {
     return Object.prototype.hasOwnProperty.call(obj, key);
@@ -446,7 +573,9 @@
   // this order. Read fresh on every call (not cached) because the widget's
   // sliders mutate a single live theta object in place -- a cached lookup
   // would go stale the instant a slider moves mid-run.
-  const TERM_ORDER = ["edges", "nodematch", "mutual"];
+  const TERM_ORDER = [
+    "edges", "nodematch", "mutual", "isolates", "istar2", "ostar2", "density", "idegree15", "odegree15",
+  ];
 
   function thetaValue(theta, name, idx) {
     const v = Array.isArray(theta) ? theta[idx] : theta && hasOwn(theta, name) ? theta[name] : undefined;
