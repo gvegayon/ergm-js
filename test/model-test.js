@@ -18,6 +18,17 @@ function sameAdj(a, b) {
   assert.deepStrictEqual(Array.from(a.adj), Array.from(b.adj));
 }
 
+function networkFromMask(n, attr, mask) {
+  const net = new ERGM.Net(n, { attr: attr });
+  let bit = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i !== j) net.set(i, j, (mask >>> bit++) & 1);
+    }
+  }
+  return net;
+}
+
 console.log("ergm.js model foundation tests\n");
 
 // Legacy `attr` remains the first attribute and can be replaced in place.
@@ -178,6 +189,134 @@ console.log("ergm.js model foundation tests\n");
   } finally {
     delete ERGM.TERM_FACTORIES.scaledEdges;
   }
+}
+
+// Attribute factories use the requested attribute vector and their IDs are
+// independent theta/statistic keys. The fixture is recorded in the frozen
+// term contract: x = [1, 3, 6], ties 0->1 and 2->1.
+{
+  const net = new ERGM.Net(3, {
+    attrs: [[0, 0, 1], [1, 3, 6]],
+  });
+  net.set(0, 1, true);
+  net.set(2, 1, true);
+  const model = ERGM.createModel([
+    { term: "absdiff", id: "distance", attr: 1 },
+    { term: "diff", id: "tailMinusHead", attr: 1, alpha: 1, tailHead: true },
+    { term: "diff", id: "headMinusTail", attr: 1, alpha: 1, tailHead: false },
+    { term: "nodeicov", id: "receiver", attr: 1 },
+    { term: "nodeocov", id: "sender", attr: 1 },
+    { term: "nodecov", id: "endpointSum", attr: 1 },
+    { term: "nodematch", id: "numericMatch", attr: 1 },
+    { term: "nodematch", id: "groupMatch", attr: 0 },
+  ]);
+
+  assert.deepStrictEqual(model.statistics(net), {
+    distance: 5,
+    tailMinusHead: 1,
+    headMinusTail: -1,
+    receiver: 6,
+    sender: 7,
+    endpointSum: 13,
+    numericMatch: 0,
+    groupMatch: 1,
+  });
+  assert.strictEqual(net.statistics().nodematch, 1);
+
+  const rec = model.step(
+    net.clone(),
+    { receiver: 0.5, sender: 0.25 },
+    sequence([0, 0, 0.5])
+  );
+  assert.ok(Math.abs(rec.p - 1 / (1 + Math.exp(-1.75))) < 1e-12);
+}
+
+// A change statistic is the value of a candidate attribute tie, regardless
+// of whether that tie is currently present. Exhaust every three-node graph
+// and both states of every candidate dyad.
+{
+  const attr = [1, 3, 6];
+  const model = ERGM.createModel([
+    { term: "absdiff", id: "abs", alpha: 2 },
+    { term: "diff", id: "diffForward", alpha: 3, tailHead: true },
+    { term: "diff", id: "diffReverse", alpha: 2, tailHead: false },
+    { term: "nodeicov", id: "inCov" },
+    { term: "nodeocov", id: "outCov" },
+    { term: "nodecov", id: "cov" },
+    { term: "nodematch", id: "match" },
+  ]);
+
+  for (let mask = 0; mask < 64; mask++) {
+    const net = networkFromMask(3, attr, mask);
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        if (i === j) continue;
+        const off = net.clone();
+        const on = net.clone();
+        off.set(i, j, false);
+        on.set(i, j, true);
+        for (let k = 0; k < model.terms.length; k++) {
+          const term = model.terms[k];
+          assert.strictEqual(
+            term.delta(net, i, j),
+            term.stat(on) - term.stat(off),
+            term.id + " must satisfy stat/delta identity for mask " + mask + ", " + i + "->" + j
+          );
+        }
+      }
+    }
+  }
+}
+
+// Descriptor and runtime validation protect attribute factories from invalid
+// selectors, exponents, direction flags, and mutated network vectors.
+{
+  assert.throws(
+    () => ERGM.createModel([{ term: "nodecov", id: "bad", attr: -1 }]),
+    /`attr` must be a non-negative integer/
+  );
+  assert.throws(
+    () => ERGM.createModel([{ term: "nodecov", id: "bad", attr: 0.5 }]),
+    /`attr` must be a non-negative integer/
+  );
+  assert.throws(
+    () => ERGM.createModel([{ term: "absdiff", id: "bad", alpha: 0 }]),
+    /`alpha` must be a positive finite number/
+  );
+  assert.throws(
+    () => ERGM.createModel([{ term: "absdiff", id: "bad", alpha: Infinity }]),
+    /`alpha` must be a positive finite number/
+  );
+  assert.throws(
+    () => ERGM.createModel([{ term: "diff", id: "bad", alpha: 0.5 }]),
+    /`alpha` must be a positive integer/
+  );
+  assert.throws(
+    () => ERGM.createModel([{ term: "diff", id: "bad", tailHead: 1 }]),
+    /`tailHead` must be a boolean/
+  );
+  assert.throws(
+    () => ERGM.createModel([{ term: "nodeicov", id: "bad", attr: 0, alpha: 1 }]),
+    /does not accept parameter/
+  );
+
+  const missingAttr = ERGM.createModel([{ term: "nodeocov", id: "unavailable", attr: 1 }]);
+  assert.throws(() => missingAttr.statistics(new ERGM.Net(2)), /out of range/);
+
+  const malformedVector = new ERGM.Net(2, { attr: [1, 2] });
+  malformedVector.attrs[0] = [1, NaN];
+  const model = ERGM.createModel([{ term: "nodeocov", id: "sender" }]);
+  assert.throws(() => model.statistics(malformedVector), /finite numbers/);
+
+  const overflow = new ERGM.Net(2, { attr: [Number.MAX_VALUE, -Number.MAX_VALUE] });
+  const overflowModel = ERGM.createModel([{ term: "diff", id: "difference", alpha: 1 }]);
+  assert.throws(() => overflowModel.step(overflow, {}, ERGM.makeRNG(1)), /non-finite attribute contribution/);
+
+  const sumOverflow = new ERGM.Net(2, { attr: [Number.MAX_VALUE / 2, Number.MAX_VALUE / 2] });
+  sumOverflow.set(0, 1, true);
+  sumOverflow.set(1, 0, true);
+  const sumOverflowModel = ERGM.createModel([{ term: "nodecov", id: "endpoints" }]);
+  assert.throws(() => sumOverflowModel.statistics(sumOverflow), /non-finite attribute contribution/);
 }
 
 // Model definition failures are detected before sampling.
