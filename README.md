@@ -1,5 +1,11 @@
 # ergm-js
 
+[![npm version](https://img.shields.io/npm/v/ergm-js.svg)](https://www.npmjs.com/package/ergm-js)
+[![npm downloads](https://img.shields.io/npm/dm/ergm-js.svg)](https://www.npmjs.com/package/ergm-js)
+[![npm total downloads](https://img.shields.io/npm/dt/ergm-js.svg)](https://www.npmjs.com/package/ergm-js)
+[![license](https://img.shields.io/npm/l/ergm-js.svg)](LICENSE.md)
+
+
 A small, dependency-light JavaScript simulator for **Exponential Random Graph
 Models (ERGMs)**, built for teaching and for slides. Drop it into a static
 site or a reveal.js/Quarto presentation to show, live, how an ERGM generates
