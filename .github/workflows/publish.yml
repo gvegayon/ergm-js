@@ -37,7 +37,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
+          # No registry-url: it makes setup-node write an .npmrc and export a
+          # dummy NODE_AUTH_TOKEN, which npm then sends instead of exchanging
+          # the OIDC identity, and the registry answers 404.
       # Trusted publishing needs npm 11.5.1 or later
       - run: npm install -g npm@latest
       # A version already on npm (e.g. published by hand) is not published again
