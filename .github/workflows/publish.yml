@@ -1,0 +1,65 @@
+name: Publish
+# Publishes to npm when a version tag (v0.2.1, ...) is pushed. Uses npm's
+# trusted publishing: no token is stored; npm trusts this workflow through
+# GitHub's OIDC, and the package gets a provenance statement. Each tag also
+# gets a GitHub release, which is what please-bump reads to know that a
+# version has shipped (and that the next change needs a new one).
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The tag matches package.json and src/ergm.js
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          test "v$version" = "$GITHUB_REF_NAME" || {
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $version"; exit 1; }
+          node -e 'if (require("./src/ergm.js").VERSION !== process.argv[1]) { console.error("src/ergm.js VERSION differs from package.json"); process.exit(1); }' "$version"
+      - run: npm test
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later
+      - run: npm install -g npm@latest
+      # A version already on npm (e.g. published by hand) is not published again
+      - name: Publish
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          if npm view "ergm-js@$version" version >/dev/null 2>&1; then
+            echo "ergm-js@$version is already on npm; nothing to do."
+          else
+            npm publish
+          fi
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: GitHub release for the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "ergm-js $GITHUB_REF_NAME" --generate-notes

@@ -1,9 +1,24 @@
 {
   "name": "ergm-js",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "A small, dependency-light Exponential Random Graph Model simulator for teaching and presentations.",
+  "homepage": "https://gvegayon.github.io/ergm-js/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gvegayon/ergm-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gvegayon/ergm-js/issues"
+  },
+  "author": "George G. Vega Yon (https://github.com/gvegayon)",
   "license": "MIT",
   "main": "src/ergm.js",
+  "exports": {
+    ".": "./src/ergm.js",
+    "./widget": "./src/ergm-widget.js",
+    "./vendor/*": "./vendor/*",
+    "./package.json": "./package.json"
+  },
   "files": [
     "src/",
     "vendor/",
@@ -21,5 +36,8 @@
     "simulation",
     "sigma.js",
     "graphology"
-  ]
+  ],
+  "engines": {
+    "node": ">=18"
+  }
 }

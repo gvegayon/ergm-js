@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata from this file."
 type: software
 title: "ergm-js: Dependency-Light Exponential Random Graph Model Simulator"
-version: "0.2.1"
+version: "0.3.0"
 authors:
   - family-names: "Vega Yon"
     given-names: "George G."
