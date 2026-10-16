@@ -65,8 +65,8 @@ An ERGM assigns a directed graph **y** on *n* nodes the probability
 \text{Pr}_{\mathcal{Y}}(Y = y; \theta) = \exp(\theta \times g(y)) / \kappa(\theta)
 ```
 
-where `g(y)` is a vector of **sufficient statistics** -- counts of structural
-features of the graph -- and `kappa(theta)` is a sum over *every possible
+where $g(y)$ is a vector of **sufficient statistics** -- counts of structural
+features of the graph -- and $\kappa(\theta)$ is a sum over *every possible
 graph on n nodes*, which is astronomically large and never computed here (or,
 generally, anywhere).
 
@@ -83,16 +83,16 @@ one-mode and directed throughout.
 
 ### Why simulation doesn't need `kappa`
 
-You never need `kappa(theta)` to *simulate* from this model, only to
+You never need $\kappa(\theta)$ to *simulate* from this model, only to
 *evaluate* its density exactly. The **full conditional** of a single dyad
 `y_ij`, holding every other dyad fixed, is a plain logistic function of the
-**change statistic** -- how much `g(y)` would change if `y_ij` were switched
+**change statistic** -- how much $g(y)$ would change if $y_{ij}$ were switched
 on:
 
-```
-P(Y_ij = 1 | Y_-ij) = 1 / (1 + exp(-theta . delta_ij(y)))
+```math
+\text{Pr}_{\mathcal{Y}}(Y_{ij} = 1 \mid Y_{-ij}) = 1 / (1 + \exp{-\theta \times \delta_{ij}(y)}) \\
 
-delta_ij(y) = g(y with y_ij = 1) - g(y with y_ij = 0)
+\delta_{ij}(y) = g(y \text{ with }y_{ij} = 1) - g(y \text{ with }y_{ij} = 0)
 ```
 
 `kappa` cancels exactly, because it doesn't depend on the one dyad you're
