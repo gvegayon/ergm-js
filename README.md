@@ -61,8 +61,8 @@ it through Jekyll. `index.html` at the root lands at
 
 An ERGM assigns a directed graph **y** on *n* nodes the probability
 
-```
-P(Y = y; theta) = exp(theta . g(y)) / kappa(theta)
+```math
+\text{Pr}_{\mathcal{Y}}(Y = y; \theta) = \exp(\theta \times g(y)) / \kappa(\theta)
 ```
 
 where `g(y)` is a vector of **sufficient statistics** -- counts of structural
