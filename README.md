@@ -90,9 +90,10 @@ You never need $\kappa(\theta)$ to *simulate* from this model, only to
 on:
 
 ```math
-\text{Pr}_{\mathcal{Y}}(Y_{ij} = 1 \mid Y_{-ij}) = 1 / (1 + \exp{-\theta \times \delta_{ij}(y)}) \\
-
-\delta_{ij}(y) = g(y \text{ with }y_{ij} = 1) - g(y \text{ with }y_{ij} = 0)
+\begin{align*}
+\text{Pr}_{\mathcal{Y}}(Y_{ij} = 1 \mid Y_{-ij}) &= 1 / (1 + \exp{-\theta \times \delta_{ij}(y)}) \\
+\delta_{ij}(y) &= g(y \text{ with }y_{ij} = 1) - g(y \text{ with }y_{ij} = 0)
+\end{align*}
 ```
 
 `kappa` cancels exactly, because it doesn't depend on the one dyad you're
