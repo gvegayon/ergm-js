@@ -1,6 +1,6 @@
 {
   "name": "ergm-js",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A small, dependency-light Exponential Random Graph Model simulator for teaching and presentations.",
   "homepage": "https://gvegayon.github.io/ergm-js/",
   "repository": {
@@ -27,7 +27,7 @@
     "LICENSE.md"
   ],
   "scripts": {
-    "test": "node test/selftest.js && node test/model-test.js && node test/widget-test.js"
+    "test": "node test/selftest.js && node test/model-test.js && node test/sampler-test.js && node test/widget-test.js"
   },
   "keywords": [
     "ergm",

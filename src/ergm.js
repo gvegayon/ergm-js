@@ -27,8 +27,13 @@
  * where delta_ij(y) = g(y with y_ij=1) - g(y with y_ij=0). kappa cancels
  * exactly because it does not depend on y_ij. Repeatedly resampling random
  * dyads this way is a Gibbs sampler whose stationary distribution is the
- * ERGM above (Hunter & Handcock 2006; this is also how ergm's MCMC works
- * under the hood).
+ * ERGM above (Hunter & Handcock 2006).
+ *
+ * The R package ergm instead uses Metropolis-Hastings with a "tie / no tie"
+ * (TNT) proposal: half the time it proposes removing an existing tie, half
+ * the time it toggles a random dyad, and it corrects for that asymmetry in
+ * the acceptance ratio. Same stationary distribution, much faster mixing on
+ * sparse graphs. Pass {sampler: "tnt"} to step/simulate/createModel for it.
  *
  * Usage (browser):
  *   <script src="ergm.js"></script>
@@ -53,7 +58,7 @@
 
   // Public semantic version. The widget renders this value in its graph pane;
   // keep it synchronized with package.json (covered by the self-test).
-  const VERSION = "0.3.0";
+  const VERSION = "0.4.0";
 
   // ---------------------------------------------------------------------
   // RNG -- mulberry32, a small, fast, seedable PRNG. Not cryptographic;
@@ -108,6 +113,25 @@
     this.n = n;
     this.adj = opts.adj || new Uint8Array(n * n);
 
+    // Edge index: a dense list of present dyads (as i * n + j) plus each
+    // dyad's position in it (-1 when absent). set() keeps both in sync with
+    // adj in O(1), which lets the TNT sampler draw an existing tie uniformly
+    // at random. Write ties through set(), never into adj directly.
+    this._edges = new Int32Array(n * n);
+    this._edgePos = new Int32Array(n * n).fill(-1);
+    this._nEdges = 0;
+    for (let i = 0; i < n; i++) {
+      if (this.adj[i * n + i] !== 0) {
+        throw new RangeError("Net option `adj` has a self-loop at node " + i + "; the graph is loopless.");
+      }
+    }
+    for (let k = 0; k < this.adj.length; k++) {
+      if (this.adj[k] === 1) {
+        this._edgePos[k] = this._nEdges;
+        this._edges[this._nEdges++] = k;
+      }
+    }
+
     if (opts.attr !== undefined && opts.attrs !== undefined) {
       throw new TypeError("Net options `attr` and `attrs` are mutually exclusive.");
     }
@@ -146,7 +170,30 @@
   };
 
   Net.prototype.set = function (i, j, value) {
-    this.adj[i * this.n + j] = value ? 1 : 0;
+    const on = value ? 1 : 0;
+    if (i === j && on) {
+      throw new RangeError("Net.set(" + i + ", " + j + ") would add a self-loop; the graph is loopless.");
+    }
+    const k = i * this.n + j;
+    const was = this.adj[k] === 1;
+    this.adj[k] = on;
+    if (was === (on === 1)) return;
+    if (on) {
+      this._edgePos[k] = this._nEdges;
+      this._edges[this._nEdges++] = k;
+    } else {
+      // Swap-remove: move the last listed edge into the vacated slot.
+      const pos = this._edgePos[k];
+      const last = this._edges[--this._nEdges];
+      this._edges[pos] = last;
+      this._edgePos[last] = pos;
+      this._edgePos[k] = -1;
+    }
+  };
+
+  // Number of directed ties, in O(1).
+  Net.prototype.edgeCount = function () {
+    return this._nEdges;
   };
 
   Net.prototype.clone = function () {
@@ -648,10 +695,12 @@
     }
   }
 
-  function createModel(specs) {
+  function createModel(specs, opts) {
     if (!Array.isArray(specs)) {
       throw new TypeError("ERGM.createModel(specs) requires an array.");
     }
+    const sampler = resolveSampler(opts);
+    const samplerName = opts && opts.sampler !== undefined ? opts.sampler : "gibbs";
 
     const seen = Object.create(null);
     const instances = new Array(specs.length);
@@ -679,13 +728,14 @@
         }
         return out;
       },
+      sampler: samplerName,
       step: function (net, theta, rng) {
         validateInstances(net, instances);
-        return gibbsStep(net, theta, rng, instances);
+        return sampler(net, theta, rng, instances);
       },
       simulate: function (net, theta, steps, rng, onStep) {
         validateInstances(net, instances);
-        return runSimulation(net, theta, steps, rng, onStep, instances);
+        return runSimulation(net, theta, steps, rng, onStep, instances, sampler);
       },
     };
     Object.defineProperty(model, "_isERGMModel", { value: true });
@@ -705,12 +755,8 @@
     return v || 0;
   }
 
-  function gibbsStep(net, theta, rng, instances) {
-    const n = net.n;
-    let i = Math.floor(rng() * n);
-    let j = Math.floor(rng() * (n - 1));
-    if (j >= i) j++; // uniform i != j without rejection sampling
-
+  // theta . delta_ij(y): the log-odds of y_ij = 1 given the rest of the graph.
+  function changeScore(net, theta, i, j, instances) {
     let score = 0;
     if (instances) {
       for (let k = 0; k < instances.length; k++) {
@@ -724,7 +770,23 @@
         if (v) score += v * TERMS[name].delta(net, i, j);
       }
     }
-    const p = 1 / (1 + Math.exp(-score));
+    return score;
+  }
+
+  // Uniform ordered pair i != j without rejection sampling.
+  function randomDyad(n, rng) {
+    const i = Math.floor(rng() * n);
+    let j = Math.floor(rng() * (n - 1));
+    if (j >= i) j++;
+    return [i, j];
+  }
+
+  // Gibbs: redraw y_ij from its full conditional. `p` is P(y_ij = 1 | rest).
+  function gibbsStep(net, theta, rng, instances) {
+    const dyad = randomDyad(net.n, rng);
+    const i = dyad[0];
+    const j = dyad[1];
+    const p = 1 / (1 + Math.exp(-changeScore(net, theta, i, j, instances)));
 
     const was = net.has(i, j);
     const on = rng() < p;
@@ -733,17 +795,79 @@
     return { i: i, j: j, p: p, was: was, on: on, changed: on !== was };
   }
 
-  // One Gibbs update on a uniformly random ordered pair (i, j), i != j.
-  // Returns a small record describing what happened, so a caller (e.g. the
-  // widget) can do an incremental UI update instead of a full redraw.
-  function step(net, theta, rng) {
-    return gibbsStep(net, theta, rng, null);
+  // Tie / no-tie (TNT) Metropolis-Hastings, ergm's default proposal for
+  // unconstrained networks (MH_TNT in ergm's C code). With probability
+  // TNT_TIE_PROB the proposal toggles off an existing tie drawn uniformly
+  // from the edge list; otherwise it toggles a uniformly random dyad. Half of
+  // all proposals therefore land on existing ties, which on a sparse network
+  // a uniform dyad pick almost never does, so ties turn over much faster.
+  const TNT_TIE_PROB = 0.5;
+
+  // log q(y | y') / q(y' | y) for toggling one dyad, given the edge count E
+  // and dyad count D of the current graph y. A specific tie is proposed with
+  // probability c/E + (1-c)/D and a specific empty dyad with (1-c)/D, except
+  // that with E = 0 the dyad branch is forced (probability 1/D).
+  function tntLogProposalRatio(nEdges, nDyads, removing) {
+    const c = TNT_TIE_PROB;
+    const odds = c / (1 - c);
+    if (removing) {
+      return nEdges === 1
+        ? -Math.log(c * nDyads + (1 - c))
+        : Math.log(nEdges / (nEdges + odds * nDyads));
+    }
+    return nEdges === 0
+      ? Math.log(c * nDyads + (1 - c))
+      : Math.log1p((odds * nDyads) / (nEdges + 1));
   }
 
-  function runSimulation(net, theta, steps, rng, onStep, instances) {
+  // TNT: always proposes flipping y_ij. `p` is the probability that the
+  // flip was accepted.
+  function tntStep(net, theta, rng, instances) {
+    const n = net.n;
+    const nEdges = net._nEdges;
+    let i, j;
+    if (nEdges === 0 || rng() < 1 - TNT_TIE_PROB) {
+      const dyad = randomDyad(n, rng);
+      i = dyad[0];
+      j = dyad[1];
+    } else {
+      const k = net._edges[Math.floor(rng() * nEdges)];
+      i = Math.floor(k / n);
+      j = k - i * n;
+    }
+
+    const was = net.has(i, j);
+    const score = changeScore(net, theta, i, j, instances);
+    const logRatio = (was ? -score : score) + tntLogProposalRatio(nEdges, n * (n - 1), was);
+    const p = logRatio >= 0 ? 1 : Math.exp(logRatio);
+    const on = rng() < p ? !was : was;
+    if (on !== was) net.set(i, j, on);
+
+    return { i: i, j: j, p: p, was: was, on: on, changed: on !== was };
+  }
+
+  const SAMPLERS = { gibbs: gibbsStep, tnt: tntStep };
+
+  // opts.sampler is "gibbs" (default) or "tnt".
+  function resolveSampler(opts) {
+    const name = opts && opts.sampler !== undefined ? opts.sampler : "gibbs";
+    if (typeof name !== "string" || !hasOwn(SAMPLERS, name)) {
+      throw new RangeError('Unknown ERGM sampler "' + name + '"; use "gibbs" or "tnt".');
+    }
+    return SAMPLERS[name];
+  }
+
+  // One sampler update (Gibbs by default, or TNT with {sampler: "tnt"}).
+  // Returns a small record describing what happened, so a caller (e.g. the
+  // widget) can do an incremental UI update instead of a full redraw.
+  function step(net, theta, rng, opts) {
+    return resolveSampler(opts)(net, theta, rng, null);
+  }
+
+  function runSimulation(net, theta, steps, rng, onStep, instances, sampler) {
     let k = 0;
     for (; k < steps; k++) {
-      const rec = gibbsStep(net, theta, rng, instances);
+      const rec = sampler(net, theta, rng, instances);
       if (onStep && onStep(rec, k) === false) {
         k++;
         break;
@@ -752,11 +876,11 @@
     return k;
   }
 
-  // Run `steps` Gibbs updates. Optional `onStep(record, k)` callback fires
+  // Run `steps` sampler updates. Optional `onStep(record, k)` callback fires
   // after each one (used by the animated widget); returning `false` stops
-  // early.
-  function simulate(net, theta, steps, rng, onStep) {
-    return runSimulation(net, theta, steps, rng, onStep, null);
+  // early. `opts.sampler` selects "gibbs" (default) or "tnt".
+  function simulate(net, theta, steps, rng, onStep, opts) {
+    return runSimulation(net, theta, steps, rng, onStep, null, resolveSampler(opts));
   }
 
   // Build a simple Bernoulli (Erdos-Renyi-style) random directed graph with
@@ -788,6 +912,7 @@
     TERM_FACTORIES: TERM_FACTORIES,
     TERM_ORDER: TERM_ORDER,
     createModel: createModel,
+    SAMPLERS: Object.freeze(Object.keys(SAMPLERS)),
     step: step,
     simulate: simulate,
     bernoulli: bernoulli,

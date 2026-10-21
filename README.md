@@ -98,8 +98,7 @@ on:
 
 `kappa` cancels exactly, because it doesn't depend on the one dyad you're
 resampling. Repeating this over random dyads is a Gibbs sampler whose
-stationary distribution is the ERGM above (Hunter & Handcock 2006) -- and
-it's how MCMC-based ERGM fitting works under the hood, minus the fitting.
+stationary distribution is the ERGM above (Hunter & Handcock 2006).
 
 The simulation loop, in full:
 
@@ -125,6 +124,32 @@ Note `delta_ij` never looks at `y_ij` itself -- only at the rest of the graph
 serve both directions of the Gibbs step, whether you're proposing to add a
 currently-absent tie or considering removing a present one.
 
+### Tie / no-tie (TNT) sampler
+
+The Gibbs loop above is easy to explain but slow on sparse graphs: when only
+a few percent of dyads are ties, almost every random pick lands on an empty
+dyad that stays empty, and existing ties are rarely revisited. The R package
+`ergm` uses a Metropolis-Hastings sampler with a **tie / no-tie** proposal
+instead, available here as `{ sampler: "tnt" }`:
+
+```
+repeat many times:
+    with probability 1/2 (or always, if y has no ties):
+        pick a random ordered pair (i, j), i != j
+    otherwise:
+        pick an existing tie (i, j) uniformly at random
+    propose toggling y_ij; accept with probability
+        min(1, exp(+/- theta . delta_ij(y)) * q(y | y') / q(y' | y))
+```
+
+(`+` when adding a tie, `-` when removing one.) Because existing ties are
+over-proposed, the proposal ratio corrects for it. With `E` ties and
+`D = n(n-1)` dyads in the current graph, it is `E / (E + D)` for a removal and
+`1 + D / (E + 1)` for an addition (with special cases at `E = 0` and `E = 1`,
+matching `MH_TNT` in `ergm`). Both samplers have the ERGM as their
+stationary distribution; TNT just gets there in far fewer steps when the
+graph is sparse. Gibbs stays the default.
+
 ## API (`src/ergm.js`)
 
 Loads as `window.ERGM` in a browser, or via `require("./ergm.js")` in Node.
@@ -142,7 +167,10 @@ ERGM.Net(n, { attr, rng })
 // -> a directed, loopless graph on n nodes.
 //    attr:  Uint8Array(n) binary node covariate (default: alternating 0/1).
 //    .has(i, j)              -> boolean
-//    .set(i, j, value)       -> void
+//    .set(i, j, value)       -> void (always write ties through set(); it
+//                               maintains the edge index TNT samples from;
+//                               a self-loop i === j throws RangeError)
+//    .edgeCount()            -> number of ties, O(1)
 //    .clone()                -> deep copy
 //    .statistics(terms?)     -> { edges, nodematch, mutual }
 //    .toGraphology(layout?, nodeAttrs?, edgeAttrs?) -> graphology-shaped object
@@ -152,17 +180,27 @@ ERGM.bernoulli(n, meanDegree, pGroup, rng)
 //    meanDegree / (n - 1), and each node's binary attribute is drawn i.i.d.
 //    with P(attr = 1) = pGroup (default 0.5).
 
-ERGM.step(net, theta, rng)
-// -> one Gibbs update on a random dyad. theta is {edges, nodematch, mutual}
-//    (or an array in that order). Returns
-//    { i, j, p, was, on, changed } describing what happened -- `changed`
-//    is false when the proposal left the tie as it was.
+ERGM.step(net, theta, rng, opts?)
+// -> one sampler update. theta is {edges, nodematch, mutual}
+//    (or an array in that order). opts.sampler is "gibbs" (default) or
+//    "tnt". Returns { i, j, p, was, on, changed } describing what
+//    happened -- `changed` is false when the proposal left the tie as it
+//    was. `p` is P(y_ij = 1 | rest) for Gibbs and the acceptance
+//    probability of the proposed toggle for TNT.
 //    theta is read fresh on every call, so mutating it between calls
 //    (e.g. from a live slider) takes effect immediately.
 
-ERGM.simulate(net, theta, steps, rng, onStep?)
-// -> runs `steps` Gibbs updates in a row. onStep(record, k), if given,
+ERGM.simulate(net, theta, steps, rng, onStep?, opts?)
+// -> runs `steps` sampler updates in a row. onStep(record, k), if given,
 //    fires after each one and can return `false` to stop early.
+//    opts.sampler as for step().
+
+ERGM.createModel(specs, opts?)
+// -> a compiled model whose step()/simulate() use opts.sampler
+//    ("gibbs" by default, or "tnt"); model.sampler reports which.
+
+ERGM.SAMPLERS
+// -> ["gibbs", "tnt"]
 
 ERGM.TERMS
 // -> { edges: {stat, delta}, nodematch: {stat, delta}, mutual: {stat, delta} }
@@ -227,7 +265,8 @@ ERGMWidget.mount(el, options)
 | `theta` | `{edges: -2.5, nodematch: 1.5, mutual: 1}` | live model parameters for active terms, bound to the sliders |
 | `controls` | `{n: true, meanDegree: true}` | show/hide the `n` and initial mean out-degree sliders independently |
 | `seed` | `42` | RNG seed, for reproducible runs |
-| `stepsPerFrame` | `50` | Gibbs proposals per animation frame while running |
+| `stepsPerFrame` | `50` | sampler proposals per animation frame while running |
+| `sampler` | `"gibbs"` | `"gibbs"` or `"tnt"` (tie / no-tie Metropolis-Hastings, see above) |
 | `height` | `360` | pixel height of the graph pane |
 | `layout` | `"force"` | `"force"` (see below) or `"circle"`, the original fixed two-arc layout |
 | `groupColors` | `["#00707a", "#c0491f"]` | node fill per attribute group |
@@ -411,6 +450,10 @@ probabilities have an exact logistic formula to check against; with `mutual`
 on, it checks the mutual-dyad count rises relative to a `mutual = 0`
 baseline. It also checks that a fixed seed reproduces an identical run
 bit-for-bit, and that `toGraphology()`'s output shape is well-formed.
+`test/sampler-test.js` enumerates all 64 directed graphs on three nodes and
+checks that long Gibbs and TNT chains reproduce the exact ERGM distribution
+under dyad-dependent models, and that TNT turns ties over much faster than
+Gibbs on a sparse graph.
 `test/widget-test.js` checks model normalization, slider selection, optional
 setup controls, and validation errors with a lightweight DOM stand-in.
 
