@@ -58,7 +58,7 @@
 
   // Public semantic version. The widget renders this value in its graph pane;
   // keep it synchronized with package.json (covered by the self-test).
-  const VERSION = "0.3.0";
+  const VERSION = "0.4.0";
 
   // ---------------------------------------------------------------------
   // RNG -- mulberry32, a small, fast, seedable PRNG. Not cryptographic;
@@ -120,8 +120,13 @@
     this._edges = new Int32Array(n * n);
     this._edgePos = new Int32Array(n * n).fill(-1);
     this._nEdges = 0;
+    for (let i = 0; i < n; i++) {
+      if (this.adj[i * n + i] !== 0) {
+        throw new RangeError("Net option `adj` has a self-loop at node " + i + "; the graph is loopless.");
+      }
+    }
     for (let k = 0; k < this.adj.length; k++) {
-      if (this.adj[k] === 1 && k % (n + 1) !== 0) {
+      if (this.adj[k] === 1) {
         this._edgePos[k] = this._nEdges;
         this._edges[this._nEdges++] = k;
       }
@@ -165,9 +170,12 @@
   };
 
   Net.prototype.set = function (i, j, value) {
+    const on = value ? 1 : 0;
+    if (i === j && on) {
+      throw new RangeError("Net.set(" + i + ", " + j + ") would add a self-loop; the graph is loopless.");
+    }
     const k = i * this.n + j;
     const was = this.adj[k] === 1;
-    const on = value ? 1 : 0;
     this.adj[k] = on;
     if (was === (on === 1)) return;
     if (on) {

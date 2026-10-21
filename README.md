@@ -168,7 +168,8 @@ ERGM.Net(n, { attr, rng })
 //    attr:  Uint8Array(n) binary node covariate (default: alternating 0/1).
 //    .has(i, j)              -> boolean
 //    .set(i, j, value)       -> void (always write ties through set(); it
-//                               maintains the edge index TNT samples from)
+//                               maintains the edge index TNT samples from;
+//                               a self-loop i === j throws RangeError)
 //    .edgeCount()            -> number of ties, O(1)
 //    .clone()                -> deep copy
 //    .statistics(terms?)     -> { edges, nodematch, mutual }

@@ -172,6 +172,25 @@ console.log("ergm.js sampler tests\n");
   assert.deepStrictEqual(ERGM.SAMPLERS, ["gibbs", "tnt"]);
 }
 
+// Self-loops can never enter the state space (and so the TNT edge index),
+// from either set() or a supplied adjacency matrix.
+{
+  const net = new ERGM.Net(3);
+  assert.throws(() => net.set(0, 0, true), /self-loop/);
+  net.set(0, 0, false);
+  assert.strictEqual(net.edgeCount(), 0);
+
+  const adj = new Uint8Array(9);
+  adj[1] = 1;
+  adj[4] = 1; // (1, 1)
+  assert.throws(() => new ERGM.Net(3, { adj: adj }), /self-loop at node 1/);
+
+  const rng = ERGM.makeRNG(3);
+  ERGM.simulate(net, { edges: 2 }, 2000, rng, null, { sampler: "tnt" });
+  for (let i = 0; i < 3; i++) assert.strictEqual(net.has(i, i), false);
+  assert.strictEqual(net.edgeCount(), net.statistics().edges);
+}
+
 // Unknown samplers are rejected.
 {
   const net = new ERGM.Net(3);
