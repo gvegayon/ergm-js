@@ -36,7 +36,10 @@
     // are selected by `model`, not by this object.
     controls: { n: true, meanDegree: true },
     seed: 42,
-    stepsPerFrame: 50, // Gibbs proposals per animation frame while running
+    stepsPerFrame: 50, // sampler proposals per animation frame while running
+    // MCMC update: "gibbs" (redraw a random dyad from its full conditional)
+    // or "tnt" (ergm's tie / no-tie Metropolis-Hastings proposal).
+    sampler: "gibbs",
     height: 360,
     groupColors: ["#00707a", "#c0491f"], // deck $accent / rust
     edgeColorMatch: "#00707a",
@@ -280,6 +283,10 @@
   function Widget(el, opts) {
     opts = opts || {};
     const model = normalizeModel(hasOwn(opts, "model") ? opts.model : DEFAULTS.model);
+    const sampler = hasOwn(opts, "sampler") ? opts.sampler : DEFAULTS.sampler;
+    if (ERGM.SAMPLERS.indexOf(sampler) < 0) {
+      throw new RangeError('Unknown ERGM sampler "' + sampler + '"; use ' + ERGM.SAMPLERS.join(" or ") + ".");
+    }
     const suppliedTheta = opts.theta && typeof opts.theta === "object" ? opts.theta : {};
     const theta = {};
     for (let i = 0; i < model.length; i++) {
@@ -620,9 +627,16 @@
 
   Widget.prototype.stepN = function (count) {
     const self = this;
-    ERGM.simulate(this.net, this.opts.theta, count, this._rng, function (rec) {
-      self._applyRecord(rec);
-    });
+    ERGM.simulate(
+      this.net,
+      this.opts.theta,
+      count,
+      this._rng,
+      function (rec) {
+        self._applyRecord(rec);
+      },
+      { sampler: this.opts.sampler }
+    );
     this.stepCount += count;
     this._updateStats();
     this._ensureLoop(); // let the layout animate the settle even if Run isn't on
@@ -630,7 +644,7 @@
 
   // A single animation loop drives two independent things, both gated on
   // the widget being visible:
-  //   - the Gibbs sampler, while `running` is true (Run/Pause);
+  //   - the sampler, while `running` is true (Run/Pause);
   //   - the force layout settling, while it's still "hot" (`alpha` above
   //     threshold) -- which happens after Reset and after any edge change,
   //     regardless of whether the sampler itself is running.

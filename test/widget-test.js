@@ -110,6 +110,28 @@ console.log("ergm-widget.js configuration tests\n");
   assert.notStrictEqual(inputKeys(mount({ controls: { meanDegree: false } })).indexOf("n"), -1);
 }
 
+// The sampler defaults to Gibbs and can be switched to TNT, which then drives
+// the widget's own stepping.
+{
+  assert.strictEqual(mount({}).opts.sampler, "gibbs");
+  const widget = mount({ sampler: "tnt", theta: { edges: -3, nodematch: 0, mutual: 0 } });
+  assert.strictEqual(widget.opts.sampler, "tnt");
+  // The DOM stand-in has no graphology, so record updates instead of drawing.
+  let toggles = 0;
+  widget._applyRecord = function (rec) {
+    if (rec.changed) toggles++;
+  };
+  widget._updateStats = function () {};
+  widget._ensureLoop = function () {};
+  widget.stepN(2000);
+  assert.strictEqual(widget.stepCount, 2000);
+  assert.ok(toggles > 0);
+  assert.strictEqual(widget.net.edgeCount(), widget.net.statistics().edges);
+  assert.throws(function () {
+    mount({ sampler: "metropolis" });
+  }, /Unknown ERGM sampler "metropolis"/);
+}
+
 // Invalid definitions fail before touching the target mount element.
 {
   const target = new Element("div");
